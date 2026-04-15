@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        .movie-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            overflow: hidden;
+            background-color: #161b22;
+            height: 100%;
+        }
+        .movie-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(60, 150, 250, 0.4);
+        }
+        .poster {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 0.5rem;
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 1.5rem;
+            height: 1.5rem;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }}
+        .heart-btn {
+            background-color: rgba(13, 17, 23, 0.7);
+            border-radius: 50%;
+            padding: 0.5rem;
+            transition: transform 0.2s;
+            backdrop-filter: blur(4px);
+        }
+        .heart-btn:hover {
+            transform: scale(1.1);
+        }
+        .heart-btn svg {
+            stroke: white;
+            fill: transparent;
+            transition: fill 0.2s, stroke 0.2s;
+        }
+        .heart-btn.liked svg {
+            stroke: #ef4444; 
+            fill: #ef4444; 
+        }
+        #watchlist-sidebar.open {
+            transform: translateX(0);
+        }
+        #sidebar-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+         footer {
+            background-color: #1F2937;
+            color: #f6f5f5;
+            padding: 10px 0;
+            text-align: center;
+            bottom: 0;
+            width: 100%;
+        }
+        
+        .user-rating-widget .rating-stars {
+            display: flex;
+            flex-direction: row-reverse; 
+            justify-content: center;
+        }
+        .user-rating-widget input[type="radio"] {
+            display: none;
+        }
+        .user-rating-widget label {
+            font-size: 2rem;
+            color: #4a5568; 
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .user-rating-widget .rating-stars:hover label {
+            color: #fbbf24; 
+        }
+        .user-rating-widget label:hover ~ label {
+            color: #4a5568;
+        }
+        .user-rating-widget input[type="radio"]:checked ~ label {
+            color: #f59e0b; 
+        }
+    
+
+    </style>
+</head>
+<body class="min-h-screen">
+<button id="menu-toggle" class="fixed top-4 left-4 z-[60] p-2 bg-gray-800/50 backdrop-blur-sm rounded-md text-white hover:bg-gray-700 transition">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+</button>
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-40 opacity-0 pointer-events-none transition-opacity duration-300">
+</div>
+<aside id="watchlist-sidebar" class="fixed top-0 left-0 h-full w-80 bg-gray-900 border-r border-gray-700 shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 ease-in-out">
+    <div class="flex justify-between items-center p-4 border-b border-gray-700">
+        <h2 class="text-xl font-bold text-blue-300">❤️ My Watchlist</h2>
+        <button id="close-menu-btn" class="p-1 text-gray-400 hover:text-white">&times;</button>
+    </div>
+    <ul id="watchlist-items" class="p-2 space-y-2 overflow-y-auto h-[calc(100%-60px)]">
+    </ul>
+</aside>
+<div class="container mx-auto p-4 md:p-8">
+    <header class="text-center mb-10">
+        <h1 class="text-5xl font-extrabold text-blue-400 tracking-tighter">Movie Explorer</h1>
+        <p class="text-xl mt-2 text-gray-400">Search, filter, and discover plots and trailers.</p>
+    </header>
+
+    <div id="ai-recommender" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-10 border border-blue-600/30">
+        <h2 class="text-3xl font-bold text-blue-300 mb-4">🎬 What are you in the mood for?</h2>
+        <div class="mb-4">
+            <textarea id="movie-prompt" rows="3"
+                        class="w-full p-4 rounded-lg border border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500 resize-none transition duration-150"
+                        placeholder="e.g., 'A witty, dark comedy about relationships' or 'The best historical epic released in the last 5 years'"></textarea>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row gap-4">
+            <button id="recommend-button"
+                    class="flex-grow px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-[1.005] focus:outline-none focus:ring-4 focus:ring-blue-500/50 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                <span id="button-text">Get Personalized Recommendations</span>
+                <div id="loading-spinner" class="hidden ml-3 spinner"></div>
+            </button>
+            <button id="surprise-me-button"
+                    class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition duration-150 ease-in-out transform hover:scale-[1.005] focus:outline-none focus:ring-4 focus:ring-indigo-500/50 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                Surprise Me
+            </button>
+        </div>
+    </div>
+    
+    <section id="results-container" class="mt-8 mb-10"></section>
+
+    <form id="search-form" method="POST" action="/" class="bg-gray-800 p-6 rounded-xl shadow-2xl mb-10 space-y-4">
+        <div class="flex flex-col md:flex-row gap-4">
+            <input type="text" name="search_query" id="search_query" placeholder="Search movies by title..."
+                   value="{{ search_query if search_query else '' }}"
+                   class="flex-grow p-3 rounded-lg border border-gray-700 bg-gray-900 text-white placeholder-gray-500 focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+            <select name="filter" id="filter" onchange="document.getElementById('genre_group').classList.toggle('hidden', this.value !== 'genre')"
+                    class="p-3 rounded-lg border border-gray-700 bg-gray-900 text-white focus:ring-blue-500 focus:border-blue-500 transition duration-150 w-full md:w-auto">
+                <option value="popularity" {% if selected_filter == 'popularity' %}selected{% endif %}>Popularity</option>
+                <option value="genre" {% if selected_filter == 'genre' %}selected{% endif %}>Genre</option>
+            </select>
+            <div id="genre_group" class="w-full md:w-auto {% if selected_filter != 'genre' %}hidden{% endif %}">
+                <select name="genre" id="genre" class="p-3 rounded-lg border border-gray-700 bg-gray-900 text-white focus:ring-blue-500 focus:border-blue-500 transition duration-150 w-full">
+                    {% for genre in genres %}
+                        <option value="{{ genre }}" {% if selected_genre == genre %}selected{% endif %}>{{ genre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="p-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition duration-150 shadow-md w-full md:w-auto flex-shrink-0">
+                Apply Filter/Search
+            </button>
+        </div>
+    </form>
+
+    {% if not movies %}
+    <div id="welcome-message" class="flex items-center justify-center min-h-[50vh] p-8">
+         <div class="text-center bg-gray-800 p-12 rounded-2xl shadow-2xl max-w-xl w-full border border-blue-600/50 transform transition duration-500 hover:scale-[1.01]">
+              <h2 class="text-4xl font-extrabold text-indigo-400 mb-4 tracking-tight">Ready to Explore?</h2>
+              <p class="text-lg text-gray-300 mb-6">Use the movie Recommender above for personalized suggestions, or use the search bar to find a movie by title.</p>
+              <form method="POST" action="/" class="inline-block">
+                   <input type="hidden" name="filter" value="popularity">
+                   <button type="submit" class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-lg hover:bg-blue-700 transition duration-300 transform hover:scale-[1.05]">Load Popular Movies Now</button>
+              </form>
+         </div>
+    </div>
+    {% endif %}
+
+    {% if movies %}
+    <div id="movie-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        {% for movie in movies %}
+            <div class="movie-card rounded-xl shadow-lg relative" data-imdb-id="{{ movie.imdbID }}" data-title="{{ movie.title }}" data-year="{{ movie.year }}" data-poster="{{ movie.poster }}">
+                <button class="heart-btn absolute top-2 right-2 z-10">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 016.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"></path></svg>
+                </button>
+                <div onclick="openModal('{{ movie.imdbID }}')">
+                    <img src="{{ movie.poster }}" alt="{{ movie.title }} Poster" class="poster rounded-t-xl" 
+                         onerror="this.onerror=null;this.src='https://placehold.co/300x450/374151/ffffff?text=No+Poster';">
+                    <div class="p-3">
+                        <h3 class="text-lg font-bold text-white mb-1 leading-tight">{{ movie.title }}</h3>
+                        <div class="flex justify-between items-center text-sm mt-2 text-gray-400">
+                            <span>{{ movie.year }}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="user-rating-display text-blue-400 font-bold hidden"></span>
+                                <span class="flex items-center bg-yellow-500 text-gray-900 px-2 py-0.5 rounded-full font-bold">
+                                    <svg class="w-4 h-4 mr-1 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                                    {{ movie.rating if movie.rating != 'N/A' else '?' }}
+                                </span>
+                            </div>
+                            </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+<div id="movie-modal" class="fixed inset-0 bg-black bg-opacity-80 hidden flex items-center justify-center p-4 z-50 backdrop-blur-sm" onclick="if(event.target.id === 'movie-modal') closeModal()">
+    <div class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-y-auto transform scale-95 transition-all duration-300">
+        <div class="p-6">
+            <div class="flex justify-between items-start border-b border-gray-700 pb-4 mb-4">
+                <h2 id="modal-title" class="text-3xl font-bold text-blue-400"></h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white transition duration-150 p-1 rounded-full bg-gray-700 hover:bg-gray-600">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="modal-loading" class="text-center p-10">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+                <p class="mt-4 text-gray-400 font-semibold">Fetching the universe of details...</p>
+            </div>
+            <div id="modal-content" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="col-span-1">
+                        <img id="modal-poster" src="" alt="Movie Poster" class="w-full h-auto rounded-xl mb-4 shadow-xl">
+                        <p class="text-lg font-semibold text-blue-400 mb-1">IMDb Rating:</p>
+                        <div class="flex items-center text-white text-xl font-bold mb-4">
+                            <svg class="w-6 h-6 mr-2 fill-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                            <span id="modal-rating">N/A</span>
+                        </div>
+                        
+                        <div class="mt-6 border-t border-gray-700 pt-4">
+                            <p class="text-lg font-semibold text-blue-400 mb-2">Your Rating:</p>
+                            <div class="user-rating-widget">
+                                <div class="rating-stars">
+                                    <input type="radio" id="rate-5" name="user_rating" value="5"><label for="rate-5" class="fas fa-star"></label>
+                                    <input type="radio" id="rate-4" name="user_rating" value="4"><label for="rate-4" class="fas fa-star"></label>
+                                    <input type="radio" id="rate-3" name="user_rating" value="3"><label for="rate-3" class="fas fa-star"></label>
+                                    <input type="radio" id="rate-2" name="user_rating" value="2"><label for="rate-2" class="fas fa-star"></label>
+                                    <input type="radio" id="rate-1" name="user_rating" value="1"><label for="rate-1" class="fas fa-star"></label>
+                                </div>
+                                <p id="rating-feedback" class="text-center text-sm text-gray-400 mt-2 min-h-[20px]"></p>
+                            </div>
+                        </div>
+                        </div>
+                    <div class="md:col-span-2">
+                        <p class="text-lg font-semibold text-blue-400 mb-2">Plot Summary:</p>
+                        <p id="modal-plot" class="text-gray-300 mb-6 text-base leading-relaxed"></p>
+                        <p class="text-lg font-semibold text-blue-400 mb-2">Cast:</p>
+                        <p id="modal-cast" class="text-gray-300 mb-6 text-base"></p>
+                        <h3 class="text-xl font-semibold text-blue-400 mb-3">Official Trailer</h3>
+                        <div id="trailer-embed" class="video-container"></div>
+                        <div id="no-trailer-message" class="hidden bg-red-900/50 border border-red-700 p-4 rounded-lg text-red-200 mt-4 text-sm font-medium">
+                            <span class="font-bold">Heads up:</span> No trailer was found for this movie on YouTube.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="message-box" class="fixed top-4 right-4 bg-yellow-500 text-gray-900 p-4 rounded-lg shadow-lg hidden opacity-0 transition-opacity duration-300 z-[1000]" role="alert">
+    <p id="message-text" class="font-medium"></p>
+</div>
+<script>
+    const searchInput = document.getElementById('search_query');
+    const promptInput = document.getElementById('movie-prompt');
+    const recommendButton = document.getElementById('recommend-button');
+    const surpriseMeButton = document.getElementById('surprise-me-button');
+    const buttonText = document.getElementById('button-text');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const resultsContainer = document.getElementById('results-container');
+    const welcomeMessage = document.getElementById('welcome-message');
+    const movieGrid = document.getElementById('movie-grid');
+    const messageBox = document.getElementById('message-box');
+    const messageText = document.getElementById('message-text');
+    const modal = document.getElementById('movie-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalPoster = document.getElementById('modal-poster');
+    const modalRating = document.getElementById('modal-rating');
+    const modalPlot = document.getElementById('modal-plot');
+    const modalCast = document.getElementById('modal-cast');
+    const trailerEmbed = document.getElementById('trailer-embed');
+    const noTrailerMessage = document.getElementById('no-trailer-message');
+    const modalLoading = document.getElementById('modal-loading');
+    const modalContent = document.getElementById('modal-content');
+    const menuToggle = document.getElementById('menu-toggle');
+    const closeMenuBtn = document.getElementById('close-menu-btn');
+    const sidebar = document.getElementById('watchlist-sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const watchlistItemsContainer = document.getElementById('watchlist-items');
+
+    let userRatings = {}; 
+
+    function saveUserRatings() {
+        localStorage.setItem('movieUserRatings', JSON.stringify(userRatings));
+    }
+
+    function loadUserRatings() {
+        const savedRatings = localStorage.getItem('movieUserRatings');
+        if (savedRatings) {
+            userRatings = JSON.parse(savedRatings);
+        }
+    }
+        function updateModalStars(imdbId) {
+        const rating = userRatings[imdbId];
+        const stars = document.querySelectorAll('.user-rating-widget input[name="user_rating"]');
+        const feedback = document.getElementById('rating-feedback');
+        stars.forEach(star => star.checked = false);
+        
+
+        if (rating) {
+            const starToSelect = document.getElementById(`rate-${rating}`);
+            if (starToSelect) {
+                starToSelect.checked = true;
+            }
+            feedback.textContent = `You previously rated this ${rating} star(s).`;
+        } else {
+            feedback.textContent = '';
+        }
+    }
+    function updateAllCardRatingDisplays() {
+        document.querySelectorAll('.movie-card').forEach(card => {
+            const imdbId = card.dataset.imdbId;
+            const ratingDisplay = card.querySelector('.user-rating-display');
+            
+            if (userRatings[imdbId] && ratingDisplay) {
+                ratingDisplay.innerHTML = `
+                    <svg class="w-4 h-4 mr-1 fill-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                    ${userRatings[imdbId]}
+                `;
+                ratingDisplay.classList.remove('hidden');
+                ratingDisplay.classList.add('flex', 'items-center');
+            } else if (ratingDisplay) {
+                ratingDisplay.classList.add('hidden');
+            }
+        });
+    }
+
+    document.querySelector('.user-rating-widget').addEventListener('click', (event) => {
+        if (event.target.name !== 'user_rating') {
+            return;
+        }
+
+        const newRating = parseInt(event.target.value);
+        const imdbId = modal.dataset.currentImdbId;
+        const feedback = document.getElementById('rating-feedback');
+        const currentRating = userRatings[imdbId];
+
+        if (!imdbId) return; 
+
+        if (currentRating === newRating) {
+    
+            delete userRatings[imdbId];
+            event.target.checked = false; 
+            saveUserRatings();
+            feedback.textContent = 'Rating cleared.';
+            updateAllCardRatingDisplays();
+        } else {
+        
+            userRatings[imdbId] = newRating;
+            saveUserRatings();
+            feedback.textContent = `Thanks! You rated this ${newRating} star(s).`;
+            updateAllCardRatingDisplays();
+        }
+    });
+    let watchlist = [];
+
+    function saveWatchlist() {
+        localStorage.setItem('movieWatchlist', JSON.stringify(watchlist));
+    }
+
+    function renderWatchlist() {
+        watchlistItemsContainer.innerHTML = '';
+        if (watchlist.length === 0) {
+            watchlistItemsContainer.innerHTML = `<li class="text-gray-500 text-center p-4">Your watchlist is empty.</li>`;
+            return;
+        }
+        watchlist.forEach(movie => {
+            const li = document.createElement('li');
+            li.className = 'flex items-center gap-3 p-2 bg-gray-800 rounded-md';
+            li.innerHTML = `
+                <div class="flex items-center flex-1 min-w-0 gap-3 cursor-pointer" onclick="openModal('${movie.imdbID}')">
+                    <img src="${movie.poster}" class="w-12 h-16 object-cover rounded flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-white font-semibold truncate">${movie.title}</p>
+                        <p class="text-gray-400 text-sm">${movie.year}</p>
+                    </div>
+                </div>
+                <button class="remove-from-watchlist text-gray-500 hover:text-red-500 p-1 flex-shrink-0" data-imdb-id="${movie.imdbID}">&times;</button>
+            `;
+            watchlistItemsContainer.appendChild(li);
+        });
+    }
+    
+    function toggleWatchlist(imdbID, movieData) {
+        const movieIndex = watchlist.findIndex(m => m.imdbID === imdbID);
+        if (movieIndex > -1) {
+            watchlist.splice(movieIndex, 1);
+        } else {
+            watchlist.push({
+                imdbID: imdbID,
+                title: movieData.title,
+                year: movieData.year,
+                poster: movieData.poster
+            });
+        }
+        saveWatchlist();
+        renderWatchlist();
+        updateAllHeartIcons();
+    }
+
+    function updateAllHeartIcons() {
+        document.querySelectorAll('.heart-btn').forEach(btn => {
+            const card = btn.closest('.movie-card');
+            if (card) {
+                const imdbID = card.dataset.imdbId;
+                if (watchlist.some(m => m.imdbID === imdbID)) {
+                    btn.classList.add('liked');
+                } else {
+                    btn.classList.remove('liked');
+                }
+            }
+        });
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        sidebarOverlay.classList.remove('open');
+    }
+
+    // --- Modal Logic ---
+    function closeModal() {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        trailerEmbed.innerHTML = ''; 
+        modal.removeAttribute('data-current-imdb-id'); 
+    }
+
+    function openModal(imdbId) {
+        closeSidebar();
+        if (!imdbId) return;
+        modal.dataset.currentImdbId = imdbId;
+        updateModalStars(imdbId);
+        modalTitle.textContent = '';
+        modalPoster.src = '';
+        modalContent.classList.add('hidden');
+        modalLoading.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+
+        fetch(`/get_details/${imdbId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    modalPlot.textContent = data.error;
+                } else {
+                    modalTitle.textContent = data.title || 'Movie Details';
+                    modalPoster.src = data.poster || 'https://placehold.co/300x450/374151/ffffff?text=No+Poster';
+                    modalRating.textContent = data.rating || 'N/A';
+                    modalPlot.textContent = data.plot || 'No plot summary available.';
+                    modalCast.textContent = data.cast || 'Cast information not available.';
+
+                    if (data.trailer_id) {
+                        trailerEmbed.innerHTML = `<iframe title="${data.title} Trailer" src="https://www.youtube.com/embed/${data.trailer_id}?autoplay=0&rel=0" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+                        noTrailerMessage.classList.add('hidden');
+                        trailerEmbed.classList.remove('hidden');
+                    } else {
+                        trailerEmbed.classList.add('hidden');
+                        noTrailerMessage.classList.remove('hidden');
+                    }
+                }
+                modalLoading.classList.add('hidden');
+                modalContent.classList.remove('hidden');
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                modalPlot.textContent = "An error occurred while fetching details.";
+                modalLoading.classList.add('hidden');
+                modalContent.classList.remove('hidden');
+            });
+    }
+
+    // --- AI Recommendation Logic ---
+    function searchForAiRecommendation(title) {
+        const searchForm = document.getElementById('search-form');
+        if (searchInput && searchForm) {
+            searchInput.value = title;
+            searchForm.submit();
+        }
+    }
+
+    function showMessage(message) {
+        messageText.textContent = message;
+        messageBox.classList.remove('hidden');
+        messageBox.style.opacity = '1';
+        setTimeout(() => {
+            messageBox.style.opacity = '0';
+            setTimeout(() => messageBox.classList.add('hidden'), 300);
+        }, 3000);
+    }
+
+    function setLoadingState(isLoading) {
+        recommendButton.disabled = isLoading;
+        surpriseMeButton.disabled = isLoading;
+        buttonText.textContent = isLoading ? 'Finding Recommendations...' : 'Get Personalized Recommendations';
+        loadingSpinner.classList.toggle('hidden', !isLoading);
+        if(isLoading) resultsContainer.innerHTML = '';
+    }
+
+    async function recommendMovies(prompt) {
+        setLoadingState(true);
+        if (welcomeMessage) welcomeMessage.style.display = 'none';
+        if (movieGrid) movieGrid.style.display = 'none';
+
+        try {
+            const response = await fetch(`/recommend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: prompt })
+            });
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || 'Server error');
+            if (data.recommendations && data.recommendations.length > 0) {
+                renderRecommendations(data.recommendations);
+            } else {
+                 resultsContainer.innerHTML = `<div class="bg-yellow-900/50 p-6 rounded-xl text-center text-white border border-yellow-700"><p class="font-bold text-xl mb-2">No Recommendations Found</p></div>`;
+            }
+        } catch (err) {
+            console.error(err);
+            showMessage(`Recommendation failed: ${err.message}`);
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    function renderRecommendations(recommendations) {
+        const reason = recommendations[0].reason || "Here are some movies that fit your mood.";
+        
+        let html = `<div class="bg-gray-800 p-6 rounded-xl shadow-2xl">
+            <h3 class="text-xl font-bold text-blue-400 mb-2">Your Personalized Picks</h3>
+            <p class="text-gray-300 mb-4 border-b border-gray-700 pb-3 italic">"${reason}"</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">`;
+
+        recommendations.forEach(movie => {
+            const sanitizedTitle = (movie.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const posterUrl = movie.poster || `https://placehold.co/300x450/374151/FFFFFF?text=${encodeURIComponent(movie.title)}`;
+            html += `
+                <div class="movie-card rounded-xl shadow-lg p-4 flex flex-col justify-between"
+                     style="cursor: pointer;"
+                     onclick="searchForAiRecommendation('${sanitizedTitle}')">
+                    <img src="${posterUrl}" alt="${movie.title} Poster" class="poster rounded-lg mb-3 object-cover h-64 w-full" 
+                         onerror="this.onerror=null;this.src='https://placehold.co/300x450/374151/ffffff?text=No+Poster';">
+                    <div class="flex-grow">
+                        <h4 class="text-lg font-bold text-white mb-1 leading-tight">${movie.title} (${movie.year})</h4>
+                        <p class="text-sm text-gray-300 mb-2">${movie.plot.substring(0,150)}...</p>
+                    </div>
+                    <div class="mt-2">
+                        <button onclick="event.stopPropagation(); searchForAiRecommendation('${sanitizedTitle}');" 
+                                class="w-full text-center py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-150">
+                            Search for this Movie
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div></div>`;
+        resultsContainer.innerHTML = html;
+    }
+    function initializeApp() {
+        const savedWatchlist = localStorage.getItem('movieWatchlist');
+        if (savedWatchlist) {
+            watchlist = JSON.parse(savedWatchlist);
+        }
+        loadUserRatings();
+                renderWatchlist();
+        updateAllHeartIcons();
+        updateAllCardRatingDisplays();
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.add('open');
+            sidebarOverlay.classList.add('open');
+        });
+        closeMenuBtn.addEventListener('click', closeSidebar);
+        sidebarOverlay.addEventListener('click', closeSidebar);
+                document.body.addEventListener('click', (e) => {
+            const heartBtn = e.target.closest('.heart-btn');
+            if (heartBtn) {
+                e.stopPropagation();
+                const card = heartBtn.closest('.movie-card');
+                if (card) {
+                    toggleWatchlist(card.dataset.imdbId, card.dataset);
+                }
+            }
+        });
+        watchlistItemsContainer.addEventListener('click', e => {
+            const removeBtn = e.target.closest('.remove-from-watchlist');
+            if (removeBtn) {
+                toggleWatchlist(removeBtn.dataset.imdbId, {});
+            }
+        });
+        recommendButton.addEventListener('click', () => {
+            const prompt = promptInput.value.trim();
+            if (prompt.length > 0) {
+                recommendMovies(prompt);
+            } else {
+                showMessage('Please enter a description for your movie mood.');
+            }
+        });
+        surpriseMeButton.addEventListener('click', () => {
+            promptInput.value = '';
+            recommendMovies('__SURPRISE_ME__');
+        });
+    }
+    document.addEventListener('DOMContentLoaded', initializeApp);
+</script>
+<footer>
+    &copy; 2025 Movie Explorer
+</footer>
+</body>
+</html>         

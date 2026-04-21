@@ -69,3 +69,42 @@ The system integrates **Content-Based Filtering, Collaborative Filtering (SVD), 
 ```bash
 git clone https://github.com/your-username/movie-explorer.git
 cd movie-explorer
+
+2️⃣ Create Virtual Environment (Recommended)
+python -m venv venv
+Activate the environment:
+
+Windows:
+
+venv\Scripts\activate
+
+Mac/Linux:
+
+source venv/bin/activate
+
+3️⃣ Install Dependencies
+pip install -r requirements.txt
+
+If requirements.txt is not available:
+
+pip install flask requests google-api-python-client google-generativeai
+
+4️⃣ Configure API Keys
+
+Open app2.py and replace:
+
+OMDB_API_KEY = "your_omdb_api_key"
+YOUTUBE_API_KEY = "your_youtube_api_key"
+GEMINI_API_KEY = "your_gemini_api_key"
+
+Get API keys from:
+
+OMDb API: http://www.omdbapi.com/apikey.aspx
+YouTube API: https://console.cloud.google.com/
+Gemini API: https://ai.google.dev/
+
+5️⃣ Run the Application
+python app2.py
+
+6️⃣ Open in Browser
+http://127.0.0.1:5000
